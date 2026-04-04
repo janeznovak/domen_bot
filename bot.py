@@ -19,9 +19,11 @@ DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 TARGET_USER_ID = int(os.environ["TARGET_USER_ID"])
 MASTER_USER_ID = int(os.environ["MASTER_USER_ID"])
 CHANNEL_ID = int(os.environ["CHANNEL_ID"])
-REMINDER_MESSAGE = os.environ["REMINDER_MESSAGE"]
 DATA_DIR = Path(os.getenv("DATA_DIR", "."))
 STATE_FILE = DATA_DIR / "state.json"
+
+with open(Path(__file__).parent / "ping_messages.json") as _f:
+    PING_MESSAGES = json.load(_f)
 
 MIN_INTERVAL = 1.0    # days
 MAX_INTERVAL = 5.0    # days
@@ -255,7 +257,7 @@ async def send_reminder():
     if not state.get("first_reminder_sent_iso"):
         state["first_reminder_sent_iso"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-    parts = [f"<@{TARGET_USER_ID}> {REMINDER_MESSAGE}"]
+    parts = [f"<@{TARGET_USER_ID}> {random.choice(PING_MESSAGES)}"]
 
     if state.get("pending_commitment"):
         parts.append(f'\n> Last time you said you\'d: *{state["pending_commitment"]}*\nDid you?')
