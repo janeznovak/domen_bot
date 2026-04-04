@@ -7,7 +7,7 @@ import random
 from pathlib import Path
 
 import discord
-from discord import ui
+from discord import app_commands, ui
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 TARGET_USER_ID = int(os.environ["TARGET_USER_ID"])
+MASTER_USER_ID = int(os.environ["MASTER_USER_ID"])
 CHANNEL_ID = int(os.environ["CHANNEL_ID"])
 REMINDER_MESSAGE = os.environ["REMINDER_MESSAGE"]
 DATA_DIR = Path(os.getenv("DATA_DIR", "."))
@@ -72,6 +73,7 @@ def save_state(state: dict) -> None:
 def _default_state() -> dict:
     return {
         "streak": 0,
+        "best_streak": 0,
         "current_interval_days": DEFAULT_INTERVAL,
         "too_frequent_streak": 0,
         "pending_commitment": None,
@@ -85,6 +87,14 @@ def _default_state() -> dict:
         "last_reminder_sent_iso": None,
         "last_reminder_responded": True,
         "follow_up_sent": True,
+        # stop/restart
+        "paused": False,
+        # lifetime stats
+        "first_reminder_sent_iso": None,
+        "total_reminders_sent": 0,
+        "total_working": 0,
+        "total_on_track": 0,
+        "total_too_frequent": 0,
     }
 
 
@@ -135,7 +145,9 @@ class CommitmentModal(ui.Modal, title="Accountability check"):
 
         if self.response_type == "working":
             state["streak"] = state.get("streak", 0) + 1
+            state["best_streak"] = max(state.get("best_streak", 0), state["streak"])
             state["week_working"] = state.get("week_working", 0) + 1
+            state["total_working"] = state.get("total_working", 0) + 1
             new_interval = random.uniform(1.5, 3.0)
             reply = (
                 f"🔥 Love to hear it! Streak: **{state['streak']}** reminder(s) with progress.\n"
@@ -144,6 +156,7 @@ class CommitmentModal(ui.Modal, title="Accountability check"):
             )
         else:  # on_track
             state["week_on_track"] = state.get("week_on_track", 0) + 1
+            state["total_on_track"] = state.get("total_on_track", 0) + 1
             new_interval = random.uniform(2.0, 4.0)
             reply = (
                 f"👍 Good to know. Next reminder in ~{new_interval:.1f} days.\n"
@@ -192,6 +205,7 @@ class ReminderView(ui.View):
         state = load_state()
         state["too_frequent_streak"] = state.get("too_frequent_streak", 0) + 1
         state["week_too_frequent"] = state.get("week_too_frequent", 0) + 1
+        state["total_too_frequent"] = state.get("total_too_frequent", 0) + 1
         state["last_reminder_responded"] = True
 
         new_interval = min(
@@ -232,8 +246,14 @@ class ReminderView(ui.View):
 
 async def send_reminder():
     state = load_state()
+    if state.get("paused"):
+        logger.info("Reminder skipped — bot is paused.")
+        return
     _reset_week_if_needed(state)
     state["week_reminders"] = state.get("week_reminders", 0) + 1
+    state["total_reminders_sent"] = state.get("total_reminders_sent", 0) + 1
+    if not state.get("first_reminder_sent_iso"):
+        state["first_reminder_sent_iso"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     parts = [f"<@{TARGET_USER_ID}> {REMINDER_MESSAGE}"]
 
@@ -293,12 +313,23 @@ async def send_weekly_summary():
 
 # ── Background loops ───────────────────────────────────────────────────────────
 
+async def _sleep_interruptible(seconds: float, check_interval: float = 300.0) -> None:
+    """Sleep for `seconds`, but wake up every `check_interval` seconds so the
+    loop can notice a paused/stopped state change without waiting the full duration."""
+    remaining = seconds
+    while remaining > 0:
+        await asyncio.sleep(min(remaining, check_interval))
+        remaining -= check_interval
+
+
 async def follow_up_loop():
     await client.wait_until_ready()
     while not client.is_closed():
         await asyncio.sleep(1800)  # check every 30 min
 
         state = load_state()
+        if state.get("paused"):
+            continue
         if state.get("last_reminder_responded", True) or state.get("follow_up_sent", True):
             continue
 
@@ -321,6 +352,11 @@ async def reminder_loop():
     await client.wait_until_ready()
     while not client.is_closed():
         state = load_state()
+
+        if state.get("paused"):
+            await asyncio.sleep(300)  # check every 5 min while paused
+            continue
+
         next_send_iso = state.get("next_send_iso")
 
         if next_send_iso:
@@ -335,7 +371,10 @@ async def reminder_loop():
 
         if wait > 0:
             logger.info("Next reminder at %s UTC (in %.1f h).", next_send.strftime("%Y-%m-%d %H:%M"), wait / 3600)
-            await asyncio.sleep(wait)
+            await _sleep_interruptible(wait)
+            # Re-check paused state after waking up
+            if load_state().get("paused"):
+                continue
 
         await send_reminder()
 
@@ -367,16 +406,138 @@ async def weekly_summary_loop():
         await send_weekly_summary()
 
 
+# ── Slash commands ─────────────────────────────────────────────────────────────
+
+def _build_stats_embed(state: dict, title: str, color: discord.Color) -> discord.Embed:
+    total = state.get("total_reminders_sent", 0)
+    working = state.get("total_working", 0)
+    on_track = state.get("total_on_track", 0)
+    too_frequent = state.get("total_too_frequent", 0)
+    ignored = max(0, total - working - on_track - too_frequent)
+    responded = working + on_track + too_frequent
+    response_rate = round(responded / total * 100) if total > 0 else 0
+
+    first_iso = state.get("first_reminder_sent_iso")
+    last_iso = state.get("last_reminder_sent_iso")
+
+    embed = discord.Embed(title=title, color=color,
+                          timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed.add_field(name="Total reminders", value=str(total), inline=True)
+    embed.add_field(name="Response rate", value=f"{response_rate}%", inline=True)
+    embed.add_field(name="Best streak", value=f"🔥 {state.get('best_streak', 0)}", inline=True)
+    embed.add_field(name="Working on it ✅", value=str(working), inline=True)
+    embed.add_field(name="On track 👍", value=str(on_track), inline=True)
+    embed.add_field(name="Too frequent 😅", value=str(too_frequent), inline=True)
+    embed.add_field(name="Ignored 🙈", value=str(ignored), inline=True)
+
+    if first_iso and last_iso:
+        first_dt = datetime.datetime.fromisoformat(first_iso)
+        last_dt = datetime.datetime.fromisoformat(last_iso)
+        days = (last_dt - first_dt).days
+        embed.add_field(
+            name="Journey",
+            value=f"{first_dt.strftime('%d %b %Y')} → {last_dt.strftime('%d %b %Y')} ({days} days)",
+            inline=False,
+        )
+
+    return embed
+
+
 # ── Bot startup ────────────────────────────────────────────────────────────────
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
+
+
+@tree.command(name="done", description="Stop the thesis reminders and see your final stats.")
+async def cmd_done(interaction: discord.Interaction):
+    if interaction.user.id != TARGET_USER_ID:
+        await interaction.response.send_message("This command isn't for you.", ephemeral=True)
+        return
+
+    state = load_state()
+    if state.get("paused"):
+        await interaction.response.send_message(
+            "Reminders are already paused. Nothing to do.", ephemeral=True
+        )
+        return
+
+    state["paused"] = True
+    save_state(state)
+
+    embed = _build_stats_embed(
+        state,
+        title="Thesis journey complete! 🎓",
+        color=discord.Color.gold(),
+    )
+    embed.description = (
+        "Reminders have been stopped. Congratulations on finishing your thesis!\n"
+        f"*(If this was a mistake, <@{MASTER_USER_ID}> can restart with `/restart`.)*"
+    )
+
+    channel = await client.fetch_channel(CHANNEL_ID)
+    await channel.send(
+        f"<@{TARGET_USER_ID}> has stopped the thesis reminders. 🎉",
+        embed=embed,
+    )
+    await interaction.response.send_message("Done! Reminders stopped. Stats posted in the channel.", ephemeral=True)
+    logger.info("Bot paused by target user.")
+
+
+@tree.command(name="restart", description="Re-enable thesis reminders for the target user.")
+async def cmd_restart(interaction: discord.Interaction):
+    if interaction.user.id != MASTER_USER_ID:
+        await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+        return
+
+    state = load_state()
+    if not state.get("paused"):
+        await interaction.response.send_message("Reminders are already running.", ephemeral=True)
+        return
+
+    state["paused"] = False
+    next_send = _compute_next_send(state.get("current_interval_days", DEFAULT_INTERVAL))
+    state["next_send_iso"] = next_send.isoformat()
+    state["last_reminder_responded"] = True
+    state["follow_up_sent"] = True
+    save_state(state)
+
+    channel = await client.fetch_channel(CHANNEL_ID)
+    await channel.send(
+        f"<@{TARGET_USER_ID}> Reminders are back on. "
+        f"Next ping: **{next_send.strftime('%d %b %Y at %H:%M UTC')}**. "
+        f"No escaping it. 😈"
+    )
+    await interaction.response.send_message(
+        f"Done. Next reminder scheduled for {next_send.strftime('%d %b %Y at %H:%M UTC')}.",
+        ephemeral=True,
+    )
+    logger.info("Bot restarted by master user.")
+
+
+@tree.command(name="stats", description="Show current thesis reminder statistics.")
+async def cmd_stats(interaction: discord.Interaction):
+    if interaction.user.id not in (TARGET_USER_ID, MASTER_USER_ID):
+        await interaction.response.send_message("This command isn't for you.", ephemeral=True)
+        return
+
+    state = load_state()
+    paused_note = " *(paused)*" if state.get("paused") else ""
+    embed = _build_stats_embed(
+        state,
+        title=f"Thesis reminder stats{paused_note}",
+        color=discord.Color.blurple(),
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 @client.event
 async def on_ready():
     logger.info("Logged in as %s (id: %d)", client.user, client.user.id)
     client.add_view(ReminderView())  # re-register persistent view after restart
+    await tree.sync()
+    logger.info("Slash commands synced.")
     asyncio.ensure_future(reminder_loop())
     asyncio.ensure_future(weekly_summary_loop())
     asyncio.ensure_future(follow_up_loop())
