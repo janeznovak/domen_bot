@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+print("ENV KEYS:", [k for k in os.environ.keys() if not k.startswith("PATH") and not k.startswith("PYTHON")])
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
