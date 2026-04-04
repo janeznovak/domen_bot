@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-print("ENV KEYS:", [k for k in os.environ.keys() if not k.startswith("PATH") and not k.startswith("PYTHON")])
+print("ENV KEYS:", [k for k in os.environ.keys() if not k.startswith("PATH") and not k.startswith("PYTHON")], flush=True)
 
 logging.basicConfig(
     level=logging.INFO,
