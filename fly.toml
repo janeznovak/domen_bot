@@ -1,0 +1,13 @@
+# fly.toml - Fly.io app configuration
+# Replace "your-app-name" with a unique name (e.g. domen-reminder-bot)
+
+app = "domen-reminder-bot"
+primary_region = "fra"  # Frankfurt — change to your preferred region
+
+[build]
+
+[env]
+  # Non-secret env vars can go here.
+  # Secrets (DISCORD_TOKEN, etc.) must be set via: fly secrets set KEY=value
+
+# No [http_service] section — this is a background worker, not a web server.
