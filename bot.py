@@ -32,28 +32,23 @@ SEND_HOUR_MIN = 9     # UTC (= 11 CET / 12 CEST)
 SEND_HOUR_MAX = 17    # UTC (= 19 CET / 20 CEST)
 
 BONUS_CHALLENGES = [
-    "Write just one sentence in your thesis today. Just one.",
-    "Open your thesis and read what you wrote last time.",
-    "Write a 3-bullet outline for the next section you need to tackle.",
-    "Find and read one paper related to your topic.",
-    "Set a 25-minute timer and write without stopping.",
-    "Message your supervisor with a progress update.",
-    "Write the abstract — even a rough draft counts.",
-    "Identify the ONE thing blocking you and write it down.",
-    "Review your methodology section for 15 minutes.",
-    "Write down 3 things you've already accomplished in your thesis.",
-    "Pick the easiest thing on your thesis to-do list and do it now.",
-    "Write one paragraph you've been avoiding.",
+    "Napiši samo en stavek v magistrski danes. Samo enega.",
+    "Odpri magistrsko in preberi, kar si nazadnje napisal.",
+    "Napiši 3-točkovni okvir za naslednje poglavje, ki ga moraš obravnavati.",
+    "Nastavi 25-minutni timer in piši brez ustavljanja.",
+    "Pošlji mentorju sporočilo z novostmi o napredku.",
+    "Ugotovi eno stvar, ki te blokira, in jo zapiši.",
+    "Zapiši 3 stvari, ki si jih v magistrski že dosegel.",
+    "Izberi najlažjo stvar s seznama nalog za magistrsko in jo naredi zdaj.",
 ]
 
 FOLLOW_UP_MESSAGES = [
-    "👀 Helloooo? I sent you a reminder over 24 hours ago. Just gonna leave that there.",
-    "Still ignoring me, huh? Bold strategy. Thesis not writing itself though.",
-    "I know you saw it. The little checkmark doesn't lie. 😐",
-    "Friendly reminder that I am, in fact, still here. And so is your thesis.",
-    "Oh don't mind me, I'm just a bot you've been ghosting for a day. No big deal.",
-    "24 hours. No response. Your thesis has been open 0 times. Allegedly.",
-    "Knocking knocking 🚪 ... it's your thesis. It misses you.",
+    "👀 Haloooo? Poslal sem ti opomnik pred več kot 24 urami.",
+    "Še vedno me ignoriraš, a? Magistrska se ne bo napisala sama.",
+    "Prijazni opomnik, da sem še vedno tukaj. Prav tako tvoja magistrska.",
+    "Ne meni se zame, sem samo bot, ki ga ignoriraš že en dan. Nič hudega.",
+    "24 ur. Brez odziva. Magistrska je najbrž bila odprta 0-krat.",
+    "Knock knock 🚪 ... to je tvoja magistrska. Pogreša te.",
 ]
 
 
@@ -127,10 +122,10 @@ def _compute_next_send(interval_days: float) -> datetime.datetime:
 
 # ── Discord UI ─────────────────────────────────────────────────────────────────
 
-class CommitmentModal(ui.Modal, title="Accountability check"):
+class CommitmentModal(ui.Modal, title="Preverjanje zavzetosti"):
     commitment = ui.TextInput(
-        label="What will you work on before the next reminder?",
-        placeholder="e.g. Write the introduction section...",
+        label="Na čem boš delal do naslednjega opomnika?",
+        placeholder="npr. Napiši uvodni del...",
         required=True,
         max_length=200,
     )
@@ -152,17 +147,17 @@ class CommitmentModal(ui.Modal, title="Accountability check"):
             state["total_working"] = state.get("total_working", 0) + 1
             new_interval = random.uniform(1.5, 3.0)
             reply = (
-                f"🔥 Love to hear it! Streak: **{state['streak']}** reminder(s) with progress.\n"
-                f"Next reminder in ~{new_interval:.1f} days.\n"
-                f"> Your goal: *{self.commitment.value}*"
+                f"🔥 Super! Streak: **{state['streak']}** opomnik/ov z napredkom.\n"
+                f"Naslednje obvestilo v ~{new_interval:.1f} dnevu/h.\n"
+                f"> Tvoj cilj: *{self.commitment.value}*"
             )
         else:  # on_track
             state["week_on_track"] = state.get("week_on_track", 0) + 1
             state["total_on_track"] = state.get("total_on_track", 0) + 1
             new_interval = random.uniform(2.0, 4.0)
             reply = (
-                f"👍 Good to know. Next reminder in ~{new_interval:.1f} days.\n"
-                f"> Your goal: *{self.commitment.value}*"
+                f"👍 Dobro vedeti. Naslednje obvestilo v ~{new_interval:.1f} dnevu/h.\n"
+                f"> Tvoj cilj: *{self.commitment.value}*"
             )
 
         state["current_interval_days"] = new_interval
@@ -183,23 +178,23 @@ class ReminderView(ui.View):
 
     async def _check_user(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != TARGET_USER_ID:
-            await interaction.response.send_message("This reminder isn't for you!", ephemeral=True)
+            await interaction.response.send_message("Ta opomnik ni za tebe!", ephemeral=True)
             return False
         return True
 
-    @ui.button(label="Working on it! ✅", style=discord.ButtonStyle.success, custom_id="reminder:working")
+    @ui.button(label="Jo delam! ✅", style=discord.ButtonStyle.success, custom_id="reminder:working")
     async def working(self, interaction: discord.Interaction, button: ui.Button):
         if not await self._check_user(interaction):
             return
         await interaction.response.send_modal(CommitmentModal("working"))
 
-    @ui.button(label="On track 👍", style=discord.ButtonStyle.primary, custom_id="reminder:on_track")
+    @ui.button(label="Sem na začrtani poti 👍", style=discord.ButtonStyle.primary, custom_id="reminder:on_track")
     async def on_track(self, interaction: discord.Interaction, button: ui.Button):
         if not await self._check_user(interaction):
             return
         await interaction.response.send_modal(CommitmentModal("on_track"))
 
-    @ui.button(label="Too frequent 😅", style=discord.ButtonStyle.secondary, custom_id="reminder:too_frequent")
+    @ui.button(label="Preveč pogosto sprašuješ 😅", style=discord.ButtonStyle.secondary, custom_id="reminder:too_frequent")
     async def too_frequent(self, interaction: discord.Interaction, button: ui.Button):
         if not await self._check_user(interaction):
             return
@@ -221,12 +216,12 @@ class ReminderView(ui.View):
         tf_streak = state["too_frequent_streak"]
         if tf_streak >= 3:
             embed = discord.Embed(
-                title="⚠️ Really?",
+                title="⚠️ Res?",
                 description=(
-                    f"You've said 'too frequent' **{tf_streak} times in a row** "
-                    f"without reporting any progress.\n\n"
-                    f"Your thesis won't write itself.\n"
-                    f"Next reminder in ~{new_interval:.1f} days — but it's not going away."
+                    f"Rekel si 'preveč pogosto sprašuješ' **{tf_streak} krat zapored** "
+                    f"brez prijave napredka.\n\n"
+                    f"Magistrska se ne bo napisala samodejno.\n"
+                    f"Naslednje obvestilo bo poslano v ~{new_interval:.1f} dnevu/h."
                 ),
                 color=discord.Color.red(),
             )
@@ -234,7 +229,7 @@ class ReminderView(ui.View):
             await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
             await interaction.response.send_message(
-                f"Ok, got it. Next reminder in ~{new_interval:.1f} days.",
+                f"Ok, got it. Naslednje obvestilo bo poslano v ~{new_interval:.1f} dnevu/h.",
                 ephemeral=True,
             )
 
@@ -260,14 +255,14 @@ async def send_reminder():
     parts = [f"<@{TARGET_USER_ID}> {random.choice(PING_MESSAGES)}"]
 
     if state.get("pending_commitment"):
-        parts.append(f'\n> Last time you said you\'d: *{state["pending_commitment"]}*\nDid you?')
+        parts.append(f'\n> Zadnjič si rekel, da boš: *{state["pending_commitment"]}*\nSi?')
 
     streak = state.get("streak", 0)
     if streak > 0:
-        parts.append(f"\n🔥 Current streak: **{streak}** reminder(s) with reported progress!")
+        parts.append(f"\n🔥 Trenutni streak: **{streak}** opomnik/ov z napredkom!")
 
     if random.random() < 0.5:
-        parts.append(f"\n**Bonus challenge:** {random.choice(BONUS_CHALLENGES)}")
+        parts.append(f"\n**Bonus izziv:** {random.choice(BONUS_CHALLENGES)}")
 
     channel = await client.fetch_channel(CHANNEL_ID)
     await channel.send("\n".join(parts), view=ReminderView())
@@ -293,18 +288,18 @@ async def send_weekly_summary():
 
     color = discord.Color.green() if state.get("week_working", 0) > 0 else discord.Color.orange()
     embed = discord.Embed(
-        title="📊 Weekly Thesis Progress Summary",
+        title="📊 Tedenski povzetek napredka magistrske",
         color=color,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    embed.add_field(name="Reminders sent", value=str(state.get("week_reminders", 0)), inline=True)
-    embed.add_field(name="Working on it ✅", value=str(state.get("week_working", 0)), inline=True)
-    embed.add_field(name="On track 👍", value=str(state.get("week_on_track", 0)), inline=True)
-    embed.add_field(name="Too frequent 😅", value=str(state.get("week_too_frequent", 0)), inline=True)
-    embed.add_field(name="Ignored 🙈", value=str(ignored), inline=True)
+    embed.add_field(name="Poslana obvestila", value=str(state.get("week_reminders", 0)), inline=True)
+    embed.add_field(name="Jo delam ✅", value=str(state.get("week_working", 0)), inline=True)
+    embed.add_field(name="Sem na začrtani poti 👍", value=str(state.get("week_on_track", 0)), inline=True)
+    embed.add_field(name="Preveč pogosto sprašuješ 😅", value=str(state.get("week_too_frequent", 0)), inline=True)
+    embed.add_field(name="Ignorirano 🙈", value=str(ignored), inline=True)
     embed.add_field(name="Streak 🔥", value=str(state.get("streak", 0)), inline=True)
     if state.get("pending_commitment"):
-        embed.add_field(name="Current commitment", value=f'*{state["pending_commitment"]}*', inline=False)
+        embed.add_field(name="Trenutna zaveza", value=f'*{state["pending_commitment"]}*', inline=False)
 
     await channel.send(f"<@{TARGET_USER_ID}>", embed=embed)
 
@@ -424,21 +419,21 @@ def _build_stats_embed(state: dict, title: str, color: discord.Color) -> discord
 
     embed = discord.Embed(title=title, color=color,
                           timestamp=datetime.datetime.now(datetime.timezone.utc))
-    embed.add_field(name="Total reminders", value=str(total), inline=True)
-    embed.add_field(name="Response rate", value=f"{response_rate}%", inline=True)
-    embed.add_field(name="Best streak", value=f"🔥 {state.get('best_streak', 0)}", inline=True)
-    embed.add_field(name="Working on it ✅", value=str(working), inline=True)
-    embed.add_field(name="On track 👍", value=str(on_track), inline=True)
-    embed.add_field(name="Too frequent 😅", value=str(too_frequent), inline=True)
-    embed.add_field(name="Ignored 🙈", value=str(ignored), inline=True)
+    embed.add_field(name="Skupaj opomnikov", value=str(total), inline=True)
+    embed.add_field(name="Stopnja odzivnosti", value=f"{response_rate}%", inline=True)
+    embed.add_field(name="Najboljši streak", value=f"🔥 {state.get('best_streak', 0)}", inline=True)
+    embed.add_field(name="Jo delam ✅", value=str(working), inline=True)
+    embed.add_field(name="Sem na začrtani poti 👍", value=str(on_track), inline=True)
+    embed.add_field(name="Preveč pogosto 😅", value=str(too_frequent), inline=True)
+    embed.add_field(name="Ignorirano 🙈", value=str(ignored), inline=True)
 
     if first_iso and last_iso:
         first_dt = datetime.datetime.fromisoformat(first_iso)
         last_dt = datetime.datetime.fromisoformat(last_iso)
         days = (last_dt - first_dt).days
         embed.add_field(
-            name="Journey",
-            value=f"{first_dt.strftime('%d %b %Y')} → {last_dt.strftime('%d %b %Y')} ({days} days)",
+            name="Pot",
+            value=f"{first_dt.strftime('%d %b %Y')} → {last_dt.strftime('%d %b %Y')} ({days} dni)",
             inline=False,
         )
 
@@ -452,16 +447,16 @@ client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 
-@tree.command(name="done", description="Stop the thesis reminders and see your final stats.")
+@tree.command(name="done", description="Ustavi opomnike za magistrsko in poglej končno statistiko.")
 async def cmd_done(interaction: discord.Interaction):
     if interaction.user.id != TARGET_USER_ID:
-        await interaction.response.send_message("This command isn't for you.", ephemeral=True)
+        await interaction.response.send_message("Ta ukaz ni za tebe.", ephemeral=True)
         return
 
     state = load_state()
     if state.get("paused"):
         await interaction.response.send_message(
-            "Reminders are already paused. Nothing to do.", ephemeral=True
+            "Opomniki so že zaustavljeni.", ephemeral=True
         )
         return
 
@@ -470,32 +465,32 @@ async def cmd_done(interaction: discord.Interaction):
 
     embed = _build_stats_embed(
         state,
-        title="Thesis journey complete! 🎓",
+        title="Magistrska je končana! 🎓",
         color=discord.Color.gold(),
     )
     embed.description = (
-        "Reminders have been stopped. Congratulations on finishing your thesis!\n"
-        f"*(If this was a mistake, <@{MASTER_USER_ID}> can restart with `/restart`.)*"
+        "Opomniki so ustavljeni. Čestitke za dokončanje magistrske!\n"
+        f"*(Če je bila to napaka, jo lahko <@{MASTER_USER_ID}> znova zažene z `/restart`.)*"
     )
 
     channel = await client.fetch_channel(CHANNEL_ID)
     await channel.send(
-        f"<@{TARGET_USER_ID}> has stopped the thesis reminders. 🎉",
+        f"<@{TARGET_USER_ID}> je ustavil opomnike za magistrsko. 🎉",
         embed=embed,
     )
-    await interaction.response.send_message("Done! Reminders stopped. Stats posted in the channel.", ephemeral=True)
+    await interaction.response.send_message("Končano! Opomniki ustavljeni. Statistika je objavljena v kanalu.", ephemeral=True)
     logger.info("Bot paused by target user.")
 
 
-@tree.command(name="restart", description="Re-enable thesis reminders for the target user.")
+@tree.command(name="restart", description="Znova zaženi opomnike za magistrsko.")
 async def cmd_restart(interaction: discord.Interaction):
     if interaction.user.id != MASTER_USER_ID:
-        await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+        await interaction.response.send_message("Nimaš dovoljenja za ta ukaz.", ephemeral=True)
         return
 
     state = load_state()
     if not state.get("paused"):
-        await interaction.response.send_message("Reminders are already running.", ephemeral=True)
+        await interaction.response.send_message("Opomniki že tečejo.", ephemeral=True)
         return
 
     state["paused"] = False
@@ -507,28 +502,28 @@ async def cmd_restart(interaction: discord.Interaction):
 
     channel = await client.fetch_channel(CHANNEL_ID)
     await channel.send(
-        f"<@{TARGET_USER_ID}> Reminders are back on. "
-        f"Next ping: **{next_send.strftime('%d %b %Y at %H:%M UTC')}**. "
-        f"No escaping it. 😈"
+        f"<@{TARGET_USER_ID}> Opomniki so spet vklopljeni. "
+        f"Naslednji: **{next_send.strftime('%d %b %Y ob %H:%M UTC')}**. "
+        f"Ni pobega. 😈"
     )
     await interaction.response.send_message(
-        f"Done. Next reminder scheduled for {next_send.strftime('%d %b %Y at %H:%M UTC')}.",
+        f"Končano. Naslednji opomnik je načrtovan za {next_send.strftime('%d %b %Y ob %H:%M UTC')}.",
         ephemeral=True,
     )
     logger.info("Bot restarted by master user.")
 
 
-@tree.command(name="stats", description="Show current thesis reminder statistics.")
+@tree.command(name="stats", description="Prikaži trenutno statistiko opomnikov za magistrsko.")
 async def cmd_stats(interaction: discord.Interaction):
     if interaction.user.id not in (TARGET_USER_ID, MASTER_USER_ID):
-        await interaction.response.send_message("This command isn't for you.", ephemeral=True)
+        await interaction.response.send_message("Ta ukaz ni za tebe.", ephemeral=True)
         return
 
     state = load_state()
-    paused_note = " *(paused)*" if state.get("paused") else ""
+    paused_note = " *(zaustavljeno)*" if state.get("paused") else ""
     embed = _build_stats_embed(
         state,
-        title=f"Thesis reminder stats{paused_note}",
+        title=f"Statistika opomnikov za magistrsko{paused_note}",
         color=discord.Color.blurple(),
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
