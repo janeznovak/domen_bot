@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 TARGET_USER_ID = int(os.environ["TARGET_USER_ID"])
-MASTER_USER_ID = int(os.environ["MASTER_USER_ID"])
+MASTER_USER_IDS = {int(uid) for uid in os.environ["MASTER_USER_IDS"].split(",")}
 CHANNEL_ID = int(os.environ["CHANNEL_ID"])
 DATA_DIR = Path(os.getenv("DATA_DIR", "."))
 STATE_FILE = DATA_DIR / "state.json"
@@ -470,7 +470,7 @@ async def cmd_done(interaction: discord.Interaction):
     )
     embed.description = (
         "Opomniki so ustavljeni. Čestitke za dokončanje magistrske!\n"
-        f"*(Če je bila to napaka, jo lahko <@{MASTER_USER_ID}> znova zažene z `/restart`.)*"
+        "*(Če je bila to napaka, jo lahko admin znova zažene z `/restart`.)*"
     )
 
     channel = await client.fetch_channel(CHANNEL_ID)
@@ -484,7 +484,7 @@ async def cmd_done(interaction: discord.Interaction):
 
 @tree.command(name="restart", description="Znova zaženi opomnike za magistrsko.")
 async def cmd_restart(interaction: discord.Interaction):
-    if interaction.user.id != MASTER_USER_ID:
+    if interaction.user.id not in MASTER_USER_IDS:
         await interaction.response.send_message("Nimaš dovoljenja za ta ukaz.", ephemeral=True)
         return
 
@@ -515,7 +515,7 @@ async def cmd_restart(interaction: discord.Interaction):
 
 @tree.command(name="stats", description="Prikaži trenutno statistiko opomnikov za magistrsko.")
 async def cmd_stats(interaction: discord.Interaction):
-    if interaction.user.id not in (TARGET_USER_ID, MASTER_USER_ID):
+    if interaction.user.id not in MASTER_USER_IDS | {TARGET_USER_ID}:
         await interaction.response.send_message("Ta ukaz ni za tebe.", ephemeral=True)
         return
 
